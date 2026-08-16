@@ -8,9 +8,6 @@ Spiritual successor to [`ELifeRPG/Code-Generator`](https://github.com/ELifeRPG/C
 extended to also generate the operations/client layer (that tool only
 ever generated DTO structs from `components.schemas`).
 
-See `docs/superpowers/specs/2026-08-16-enforce-script-api-client-generator-design.md`
-for the full design, including scope and known open risks.
-
 ## Install
 
     dotnet tool install -g EnfusionCodegen.Cli --add-source <path-to-nupkg>
