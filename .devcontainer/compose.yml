@@ -1,0 +1,9 @@
+services:
+  workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: "sleep infinity"
+    volumes:
+      - "../:/workspace:cached"
+      - "${HOME}/.gitconfig:/home/vscode/.gitconfig:ro"
