@@ -39,6 +39,57 @@ public class SchemaModelBuilderTests
     }
 
     [Fact]
+    public void Build_CreatesEnumWithMembersFromXEnumVarnamesWhenPresent()
+    {
+        var document = MinimalDocumentWithVarnamedEnum();
+
+        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
+
+        var builtEnum = builtEnums.Single(e => e.Name == "MessageTypeDtoDto");
+        Assert.Equal(new[] { "Information", "Success", "Warning", "Error" }, builtEnum.Members.Select(m => m.Name));
+        Assert.Equal(new[] { 0, 1, 2, 3 }, builtEnum.Members.Select(m => m.Value));
+    }
+
+    [Fact]
+    public void Build_PrefersXEnumVarnames_WhenBothExtensionsPresent()
+    {
+        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+        {
+            Type = "integer",
+            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
+            {
+                new Microsoft.OpenApi.Any.OpenApiInteger(0),
+                new Microsoft.OpenApi.Any.OpenApiInteger(1),
+            },
+        };
+        schema.Extensions["x-enum-varnames"] = new Microsoft.OpenApi.Any.OpenApiArray
+        {
+            new Microsoft.OpenApi.Any.OpenApiString("FromVarnames0"),
+            new Microsoft.OpenApi.Any.OpenApiString("FromVarnames1"),
+        };
+        schema.Extensions["x-enumNames"] = new Microsoft.OpenApi.Any.OpenApiArray
+        {
+            new Microsoft.OpenApi.Any.OpenApiString("FromEnumNames0"),
+            new Microsoft.OpenApi.Any.OpenApiString("FromEnumNames1"),
+        };
+        var document = new Microsoft.OpenApi.Models.OpenApiDocument
+        {
+            Components = new Microsoft.OpenApi.Models.OpenApiComponents
+            {
+                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
+                {
+                    ["BothExtensionsDto"] = schema,
+                },
+            },
+        };
+
+        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
+
+        var builtEnum = builtEnums.Single(e => e.Name == "BothExtensionsDto");
+        Assert.Equal(new[] { "FromVarnames0", "FromVarnames1" }, builtEnum.Members.Select(m => m.Name));
+    }
+
+    [Fact]
     public void Build_FallsBackToGeneratedNames_WhenXEnumNamesMissing()
     {
         var document = MinimalDocumentWithUnnamedEnum();
@@ -98,6 +149,40 @@ public class SchemaModelBuilderTests
         };
 
         schema.Extensions["x-enumNames"] = new Microsoft.OpenApi.Any.OpenApiArray
+        {
+            new Microsoft.OpenApi.Any.OpenApiString("Information"),
+            new Microsoft.OpenApi.Any.OpenApiString("Success"),
+            new Microsoft.OpenApi.Any.OpenApiString("Warning"),
+            new Microsoft.OpenApi.Any.OpenApiString("Error"),
+        };
+
+        return new Microsoft.OpenApi.Models.OpenApiDocument
+        {
+            Components = new Microsoft.OpenApi.Models.OpenApiComponents
+            {
+                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
+                {
+                    ["MessageTypeDtoDto"] = schema,
+                },
+            },
+        };
+    }
+
+    private static Microsoft.OpenApi.Models.OpenApiDocument MinimalDocumentWithVarnamedEnum()
+    {
+        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+        {
+            Type = "integer",
+            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
+            {
+                new Microsoft.OpenApi.Any.OpenApiInteger(0),
+                new Microsoft.OpenApi.Any.OpenApiInteger(1),
+                new Microsoft.OpenApi.Any.OpenApiInteger(2),
+                new Microsoft.OpenApi.Any.OpenApiInteger(3),
+            },
+        };
+
+        schema.Extensions["x-enum-varnames"] = new Microsoft.OpenApi.Any.OpenApiArray
         {
             new Microsoft.OpenApi.Any.OpenApiString("Information"),
             new Microsoft.OpenApi.Any.OpenApiString("Success"),

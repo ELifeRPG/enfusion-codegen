@@ -53,6 +53,13 @@ public static class SchemaModelBuilder
 
     private static IReadOnlyList<string> GetEnumNames(OpenApiSchema schema, int count)
     {
+        // x-enum-varnames (OpenAPI Generator convention) takes precedence over
+        // x-enumNames (NSwag convention) when a schema carries both.
+        if (schema.Extensions.TryGetValue("x-enum-varnames", out var varnamesRaw) && varnamesRaw is OpenApiArray varnamesArray)
+        {
+            return varnamesArray.Cast<OpenApiString>().Select(s => s.Value).ToList();
+        }
+
         if (schema.Extensions.TryGetValue("x-enumNames", out var raw) && raw is OpenApiArray array)
         {
             return array.Cast<OpenApiString>().Select(s => s.Value).ToList();
