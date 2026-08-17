@@ -4,10 +4,6 @@ Generates an Enforce Script (Arma Reforger / Enfusion) REST API client —
 DTO structs, per-response callback classes, and endpoint methods on a
 singleton client class — from an OpenAPI spec.
 
-Spiritual successor to [`ELifeRPG/Code-Generator`](https://github.com/ELifeRPG/Code-Generator),
-extended to also generate the operations/client layer (that tool only
-ever generated DTO structs from `components.schemas`).
-
 ## Install
 
 ### From a published release
