@@ -8,24 +8,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v2
+      - uses: actions/checkout@v4
         with:
-          dotnet-version: 6.0.x
+          fetch-depth: 0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          # global.json pins a .NET 11 preview SDK
+          include-prerelease: true
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore --configuration Release
       - name: Test
-        run: dotnet test --no-build --verbosity normal
-      - name: Publish
-        run: >
-          export VERSION=$(git describe --abbrev=0 --tags --match "v*" | cut -c 2-);        
-          dotnet pack src/DotNetTool/DotNetTool.csproj --configuration Release --output ./out -p:Version=$VERSION;
-          dotnet nuget push ./out/*.$VERSION.nupkg --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}";
+        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Pack and publish
+        run: |
+          VERSION=$(git describe --abbrev=0 --tags --match "v*" | cut -c 2-)
+          dotnet pack src/EnfusionCodegen.Cli/EnfusionCodegen.Cli.csproj --configuration Release --output ./out -p:Version=$VERSION
+          dotnet nuget push "./out/*.$VERSION.nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}"
       - name: Upload output artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: packages
           path: ./out/*

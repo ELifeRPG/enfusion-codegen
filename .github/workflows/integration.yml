@@ -10,27 +10,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup .NET
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 6.0.x
-      - name: Install dotnet tools
-        run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
+          global-json-file: global.json
+          # global.json pins a .NET 11 preview SDK
+          include-prerelease: true
       - name: Restore dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore --configuration Release
       - name: Test
-        run: dotnet test --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true
-      - name: Collect coverage results
-        if: github.actor != 'dependabot[bot]'
-        run: |
-          reportgenerator -reports:'./coverage/**/coverage.cobertura.xml' -targetdir:'./coverage' -reporttypes:'Cobertura'
-      - name: Run Codacy Reporter
-        if: github.actor != 'dependabot[bot]'
-        uses: codacy/codacy-coverage-reporter-action@v1
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: ./coverage/Cobertura.xml
+        run: dotnet test --no-build --configuration Release --verbosity normal
