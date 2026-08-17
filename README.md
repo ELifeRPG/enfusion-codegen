@@ -10,7 +10,23 @@ ever generated DTO structs from `components.schemas`).
 
 ## Install
 
-    dotnet tool install -g EnfusionCodegen.Cli --add-source <path-to-nupkg>
+### From a published release
+
+Releases are published to ELifeRPG's GitHub Packages NuGet feed. Unlike
+npm or Docker, GitHub Packages requires authentication for NuGet even on
+public repos, so add the feed as an authenticated source once (a PAT
+with the `read:packages` scope is enough):
+
+    dotnet nuget add source --username <github-username> --password <github-pat> \
+      --store-password-in-clear-text --name eliferpg-github \
+      "https://nuget.pkg.github.com/ELifeRPG/index.json"
+
+    dotnet tool install -g EnfusionCodegen.Cli
+
+### From a local build
+
+    dotnet pack src/EnfusionCodegen.Cli/EnfusionCodegen.Cli.csproj --configuration Release --output ./out
+    dotnet tool install -g EnfusionCodegen.Cli --add-source ./out
 
 ## Usage
 
