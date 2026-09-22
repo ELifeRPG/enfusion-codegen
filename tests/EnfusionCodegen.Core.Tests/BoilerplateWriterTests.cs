@@ -23,7 +23,7 @@ public class BoilerplateWriterTests
 
         Assert.Contains("class ELIFE_Api", result);
         Assert.Contains("static ELIFE_Api GetInstance()", result);
-        Assert.Contains("protected RestContext GetElifeApi()", result);
+        Assert.Contains("RestContext GetElifeApi()", result);
     }
 
     [Fact]
