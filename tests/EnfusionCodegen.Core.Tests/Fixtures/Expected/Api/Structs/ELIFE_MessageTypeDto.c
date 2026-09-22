@@ -1,4 +1,4 @@
-enum MessageTypeDto
+enum ELIFE_MessageTypeDto
 {
 	Value0 = 0,
 	Value1 = 1,

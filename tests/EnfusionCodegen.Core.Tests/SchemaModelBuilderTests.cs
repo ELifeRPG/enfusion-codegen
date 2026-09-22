@@ -7,9 +7,7 @@ namespace EnfusionCodegen.Core.Tests;
 
 public class SchemaModelBuilderTests
 {
-    private static (System.Collections.Generic.IReadOnlyList<Core.Model.EsClass> Classes,
-        System.Collections.Generic.IReadOnlyList<Core.Model.EsEnum> Enums,
-        System.Collections.Generic.IReadOnlyList<string> SkippedSchemas) BuildFromFixture()
+    private static (IReadOnlyList<Core.Model.EsClass> Classes, IReadOnlyList<Core.Model.EsEnum> Enums, IReadOnlyList<string> SkippedSchemas) BuildFromFixture()
     {
         var (document, _) = new OpenApiDocumentReader().Read("Fixtures/swagger.json");
         return SchemaModelBuilder.Build(document);
@@ -19,9 +17,7 @@ public class SchemaModelBuilderTests
     public void Build_CreatesClassWithPropertiesInDeclaredOrder()
     {
         var (classes, _, _) = BuildFromFixture();
-
         var characterDto = classes.Single(c => c.Name == "CharacterDto");
-
         Assert.Equal(new[] { "id", "firstName", "lastName" }, characterDto.Properties.Select(p => p.JsonName));
         Assert.Equal("JsonApiStruct", characterDto.BaseTypeName);
     }
@@ -29,200 +25,102 @@ public class SchemaModelBuilderTests
     [Fact]
     public void Build_CreatesEnumWithMembersFromXEnumNamesWhenPresent()
     {
-        var document = MinimalDocumentWithNamedEnum();
-
-        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
-
-        var builtEnum = builtEnums.Single(e => e.Name == "MessageTypeDtoDto");
-        Assert.Equal(new[] { "Information", "Success", "Warning", "Error" }, builtEnum.Members.Select(m => m.Name));
-        Assert.Equal(new[] { 0, 1, 2, 3 }, builtEnum.Members.Select(m => m.Value));
+        var (_, enums, _) = SchemaModelBuilder.Build(MinimalDocumentWithEnum("x-enumNames"));
+        Assert.Equal(new[] { "Information", "Success", "Warning", "Error" }, enums.Single().Members.Select(m => m.Name));
+        Assert.Equal(new[] { 0, 1, 2, 3 }, enums.Single().Members.Select(m => m.Value));
     }
 
     [Fact]
     public void Build_CreatesEnumWithMembersFromXEnumVarnamesWhenPresent()
     {
-        var document = MinimalDocumentWithVarnamedEnum();
+        var (_, enums, _) = SchemaModelBuilder.Build(MinimalDocumentWithEnum("x-enum-varnames"));
+        Assert.Equal(new[] { "Information", "Success", "Warning", "Error" }, enums.Single().Members.Select(m => m.Name));
+    }
 
-        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
+    [Fact]
+    public void Build_CreatesOrdinalEnumFromStringValues()
+    {
+        var document = MinimalDocumentWithSchema("HealthStatus", new OpenApiSchema
+        {
+            StringEnumValues = ["unknown", "healthy", "degraded", "unhealthy"],
+            Extensions = new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["x-enum-varnames"] = ["Unknown", "Healthy", "Degraded", "Unhealthy"],
+            },
+        });
 
-        var builtEnum = builtEnums.Single(e => e.Name == "MessageTypeDtoDto");
-        Assert.Equal(new[] { "Information", "Success", "Warning", "Error" }, builtEnum.Members.Select(m => m.Name));
-        Assert.Equal(new[] { 0, 1, 2, 3 }, builtEnum.Members.Select(m => m.Value));
+        var (_, enums, _) = SchemaModelBuilder.Build(document);
+
+        var healthStatus = Assert.Single(enums);
+        Assert.Equal(["Unknown", "Healthy", "Degraded", "Unhealthy"], healthStatus.Members.Select(member => member.Name));
+        Assert.Equal([0, 1, 2, 3], healthStatus.Members.Select(member => member.Value));
     }
 
     [Fact]
     public void Build_PrefersXEnumVarnames_WhenBothExtensionsPresent()
     {
-        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+        var document = MinimalDocumentWithSchema("BothExtensionsDto", new OpenApiSchema
         {
-            Type = "integer",
-            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
+            Types = OpenApiSchemaType.Integer,
+            IntegerEnumValues = [0, 1],
+            Extensions = new Dictionary<string, IReadOnlyList<string>>
             {
-                new Microsoft.OpenApi.Any.OpenApiInteger(0),
-                new Microsoft.OpenApi.Any.OpenApiInteger(1),
+                ["x-enum-varnames"] = ["FromVarnames0", "FromVarnames1"],
+                ["x-enumNames"] = ["FromEnumNames0", "FromEnumNames1"],
             },
-        };
-        schema.Extensions["x-enum-varnames"] = new Microsoft.OpenApi.Any.OpenApiArray
-        {
-            new Microsoft.OpenApi.Any.OpenApiString("FromVarnames0"),
-            new Microsoft.OpenApi.Any.OpenApiString("FromVarnames1"),
-        };
-        schema.Extensions["x-enumNames"] = new Microsoft.OpenApi.Any.OpenApiArray
-        {
-            new Microsoft.OpenApi.Any.OpenApiString("FromEnumNames0"),
-            new Microsoft.OpenApi.Any.OpenApiString("FromEnumNames1"),
-        };
-        var document = new Microsoft.OpenApi.Models.OpenApiDocument
-        {
-            Components = new Microsoft.OpenApi.Models.OpenApiComponents
-            {
-                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
-                {
-                    ["BothExtensionsDto"] = schema,
-                },
-            },
-        };
+        });
 
-        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
-
-        var builtEnum = builtEnums.Single(e => e.Name == "BothExtensionsDto");
-        Assert.Equal(new[] { "FromVarnames0", "FromVarnames1" }, builtEnum.Members.Select(m => m.Name));
+        var (_, enums, _) = SchemaModelBuilder.Build(document);
+        Assert.Equal(new[] { "FromVarnames0", "FromVarnames1" }, enums.Single().Members.Select(m => m.Name));
     }
 
     [Fact]
     public void Build_FallsBackToGeneratedNames_WhenXEnumNamesMissing()
     {
-        var document = MinimalDocumentWithUnnamedEnum();
-
-        var (_, builtEnums, _) = SchemaModelBuilder.Build(document);
-
-        var builtEnum = builtEnums.Single(e => e.Name == "UnnamedEnumDto");
-        Assert.Equal(new[] { "Value0", "Value1" }, builtEnum.Members.Select(m => m.Name));
+        var (_, enums, _) = SchemaModelBuilder.Build(MinimalDocumentWithSchema("UnnamedEnumDto", new OpenApiSchema
+        {
+            Types = OpenApiSchemaType.Integer,
+            IntegerEnumValues = [0, 1],
+        }));
+        Assert.Equal(new[] { "Value0", "Value1" }, enums.Single().Members.Select(m => m.Name));
     }
 
     [Fact]
     public void Build_ReportsAllOfComposedSchemaAsSkipped_AndDoesNotSilentlyDropIt()
     {
-        var document = MinimalDocumentWithAllOfSchema();
-
-        var (classes, enums, skippedSchemas) = SchemaModelBuilder.Build(document);
-
+        var (classes, enums, skipped) = SchemaModelBuilder.Build(MinimalDocumentWithSchema("ComposedDto", new OpenApiSchema { AllOf = ["BaseDto"] }));
         Assert.DoesNotContain(classes, c => c.Name == "ComposedDto");
         Assert.DoesNotContain(enums, e => e.Name == "ComposedDto");
-        Assert.Contains("ComposedDto", skippedSchemas);
+        Assert.Contains("ComposedDto", skipped);
     }
 
-    private static Microsoft.OpenApi.Models.OpenApiDocument MinimalDocumentWithAllOfSchema()
+    [Fact]
+    public void Build_SkipsInlineObjectProperties()
     {
-        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
+        var document = MinimalDocumentWithSchema("OpenBankAccountRequestDto", new OpenApiSchema
         {
-            AllOf = new System.Collections.Generic.List<Microsoft.OpenApi.Models.OpenApiSchema>
+            Types = OpenApiSchemaType.Object,
+            Properties = new Dictionary<string, OpenApiSchema>
             {
-                new() { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Id = "BaseDto" } },
+                ["additionalData"] = new() { Types = OpenApiSchemaType.Object | OpenApiSchemaType.Null },
+                ["characterId"] = new() { Types = OpenApiSchemaType.String | OpenApiSchemaType.Null },
             },
-        };
+        });
 
-        return new Microsoft.OpenApi.Models.OpenApiDocument
-        {
-            Components = new Microsoft.OpenApi.Models.OpenApiComponents
-            {
-                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
-                {
-                    ["ComposedDto"] = schema,
-                },
-            },
-        };
+        var (classes, _, _) = SchemaModelBuilder.Build(document);
+
+        Assert.Equal(["characterId"], classes.Single().Properties.Select(property => property.JsonName));
     }
 
-    private static Microsoft.OpenApi.Models.OpenApiDocument MinimalDocumentWithNamedEnum()
+    private static OpenApiDocument MinimalDocumentWithEnum(string extensionName) => MinimalDocumentWithSchema("MessageTypeDtoDto", new OpenApiSchema
     {
-        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
-        {
-            Type = "integer",
-            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
-            {
-                new Microsoft.OpenApi.Any.OpenApiInteger(0),
-                new Microsoft.OpenApi.Any.OpenApiInteger(1),
-                new Microsoft.OpenApi.Any.OpenApiInteger(2),
-                new Microsoft.OpenApi.Any.OpenApiInteger(3),
-            },
-        };
+        Types = OpenApiSchemaType.Integer,
+        IntegerEnumValues = [0, 1, 2, 3],
+        Extensions = new Dictionary<string, IReadOnlyList<string>> { [extensionName] = ["Information", "Success", "Warning", "Error"] },
+    });
 
-        schema.Extensions["x-enumNames"] = new Microsoft.OpenApi.Any.OpenApiArray
-        {
-            new Microsoft.OpenApi.Any.OpenApiString("Information"),
-            new Microsoft.OpenApi.Any.OpenApiString("Success"),
-            new Microsoft.OpenApi.Any.OpenApiString("Warning"),
-            new Microsoft.OpenApi.Any.OpenApiString("Error"),
-        };
-
-        return new Microsoft.OpenApi.Models.OpenApiDocument
-        {
-            Components = new Microsoft.OpenApi.Models.OpenApiComponents
-            {
-                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
-                {
-                    ["MessageTypeDtoDto"] = schema,
-                },
-            },
-        };
-    }
-
-    private static Microsoft.OpenApi.Models.OpenApiDocument MinimalDocumentWithVarnamedEnum()
+    private static OpenApiDocument MinimalDocumentWithSchema(string name, OpenApiSchema schema) => new()
     {
-        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
-        {
-            Type = "integer",
-            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
-            {
-                new Microsoft.OpenApi.Any.OpenApiInteger(0),
-                new Microsoft.OpenApi.Any.OpenApiInteger(1),
-                new Microsoft.OpenApi.Any.OpenApiInteger(2),
-                new Microsoft.OpenApi.Any.OpenApiInteger(3),
-            },
-        };
-
-        schema.Extensions["x-enum-varnames"] = new Microsoft.OpenApi.Any.OpenApiArray
-        {
-            new Microsoft.OpenApi.Any.OpenApiString("Information"),
-            new Microsoft.OpenApi.Any.OpenApiString("Success"),
-            new Microsoft.OpenApi.Any.OpenApiString("Warning"),
-            new Microsoft.OpenApi.Any.OpenApiString("Error"),
-        };
-
-        return new Microsoft.OpenApi.Models.OpenApiDocument
-        {
-            Components = new Microsoft.OpenApi.Models.OpenApiComponents
-            {
-                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
-                {
-                    ["MessageTypeDtoDto"] = schema,
-                },
-            },
-        };
-    }
-
-    private static Microsoft.OpenApi.Models.OpenApiDocument MinimalDocumentWithUnnamedEnum()
-    {
-        var schema = new Microsoft.OpenApi.Models.OpenApiSchema
-        {
-            Type = "integer",
-            Enum = new System.Collections.Generic.List<Microsoft.OpenApi.Any.IOpenApiAny>
-            {
-                new Microsoft.OpenApi.Any.OpenApiInteger(0),
-                new Microsoft.OpenApi.Any.OpenApiInteger(1),
-            },
-        };
-
-        return new Microsoft.OpenApi.Models.OpenApiDocument
-        {
-            Components = new Microsoft.OpenApi.Models.OpenApiComponents
-            {
-                Schemas = new System.Collections.Generic.Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
-                {
-                    ["UnnamedEnumDto"] = schema,
-                },
-            },
-        };
-    }
+        Components = new OpenApiComponents { Schemas = new Dictionary<string, OpenApiSchema> { [name] = schema } },
+    };
 }

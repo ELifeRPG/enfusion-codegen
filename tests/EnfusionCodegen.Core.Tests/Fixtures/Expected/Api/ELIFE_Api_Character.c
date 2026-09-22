@@ -1,6 +1,6 @@
 modded class ELIFE_Api
 {
-	void CreateCharacter(CharacterDto body, Managed instance = null, string functionName = "")
+	void CreateCharacter(ELIFE_CharacterDto body, Managed instance = null, string functionName = "")
 	{
 		ELIFE_CharacterDtoResultDtoCallback cbx = new ELIFE_CharacterDtoResultDtoCallback;
 		cbx.SetCallback(instance, functionName);

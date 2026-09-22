@@ -1,4 +1,4 @@
-using Microsoft.OpenApi.Models;
+using EnfusionCodegen.Core.OpenApi;
 
 namespace EnfusionCodegen.Core.Model;
 
@@ -14,9 +14,9 @@ public class EsType
 
     public static EsType FromSchema(OpenApiSchema schema)
     {
-        if (schema.Type == "array")
+        if (schema.HasType(OpenApiSchemaType.Array))
         {
-            var itemType = FromSchema(schema.Items);
+            var itemType = schema.Items is null ? new EsType { TypeName = string.Empty } : FromSchema(schema.Items);
             var itemTypeName = (itemType.IsReference && !itemType.IsEnum) || itemType.BaseTypeName is not null
                 ? $"ref {itemType.TypeName}"
                 : itemType.TypeName;
@@ -26,51 +26,56 @@ public class EsType
                 TypeName = $"ref array<{itemTypeName}>",
                 DefaultValueLiteral = "{}",
                 IsArray = true,
-                IsNullable = schema.Nullable,
+                IsNullable = schema.IsNullable,
             };
         }
 
-        if (schema.Type == "integer" && schema.Enum.Count > 0)
+        if (schema.IntegerEnumValues.Count > 0 || schema.StringEnumValues.Count > 0)
         {
             return new EsType
             {
-                TypeName = schema.Reference?.Id ?? "int",
+                TypeName = schema.ReferenceName ?? (schema.IntegerEnumValues.Count > 0 ? "int" : "string"),
                 IsEnum = true,
-                IsReference = schema.Reference is not null,
-                IsNullable = schema.Nullable,
+                IsReference = schema.ReferenceName is not null,
+                IsNullable = schema.IsNullable,
             };
         }
 
-        if (!string.IsNullOrEmpty(schema.Type))
+        var nonNullableType = GetNonNullableType(schema.Types);
+        if (nonNullableType != OpenApiSchemaType.None)
         {
-            var typeName = schema.Type switch
+            var typeName = nonNullableType switch
             {
-                "integer" => "int",
-                "number" => "float",
-                "boolean" => "bool",
-                "object" => schema.Reference?.Id ?? "class",
-                _ => schema.Type,
+                OpenApiSchemaType.Integer => "int",
+                OpenApiSchemaType.Number => "float",
+                OpenApiSchemaType.Boolean => "bool",
+                OpenApiSchemaType.Object => schema.ReferenceName ?? "class",
+                OpenApiSchemaType.String => "string",
+                _ => string.Empty,
             };
 
             return new EsType
             {
                 TypeName = typeName,
-                BaseTypeName = schema.Type == "object" ? "JsonApiStruct" : null,
-                IsReference = schema.Type == "object" && schema.Reference is not null,
-                IsNullable = schema.Nullable,
+                BaseTypeName = nonNullableType == OpenApiSchemaType.Object ? "JsonApiStruct" : null,
+                IsReference = nonNullableType == OpenApiSchemaType.Object && schema.ReferenceName is not null,
+                IsNullable = schema.IsNullable,
             };
         }
 
-        if (!string.IsNullOrEmpty(schema.Reference?.Id))
+        if (!string.IsNullOrEmpty(schema.ReferenceName))
         {
             return new EsType
             {
-                TypeName = schema.Reference.Id,
+                TypeName = schema.ReferenceName,
                 IsReference = true,
-                IsNullable = schema.Nullable,
+                IsNullable = schema.IsNullable,
             };
         }
 
-        return new EsType { TypeName = string.Empty, IsNullable = schema.Nullable };
+        return new EsType { TypeName = string.Empty, IsNullable = schema.IsNullable };
     }
+
+    private static OpenApiSchemaType GetNonNullableType(OpenApiSchemaType types) =>
+        types & ~OpenApiSchemaType.Null;
 }

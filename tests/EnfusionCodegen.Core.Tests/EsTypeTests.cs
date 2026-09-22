@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using EnfusionCodegen.Core.Model;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using EnfusionCodegen.Core.OpenApi;
 using Xunit;
 
 namespace EnfusionCodegen.Core.Tests;
@@ -9,16 +7,13 @@ namespace EnfusionCodegen.Core.Tests;
 public class EsTypeTests
 {
     [Fact]
-    public void FromSchema_MapsNumberToFloat()
-    {
-        var type = EsType.FromSchema(new OpenApiSchema { Type = "number" });
-        Assert.Equal("float", type.TypeName);
-    }
+    public void FromSchema_MapsNumberToFloat() =>
+        Assert.Equal("float", EsType.FromSchema(new OpenApiSchema { Types = OpenApiSchemaType.Number }).TypeName);
 
     [Fact]
     public void FromSchema_MapsIntegerWithoutEnumToInt()
     {
-        var type = EsType.FromSchema(new OpenApiSchema { Type = "integer" });
+        var type = EsType.FromSchema(new OpenApiSchema { Types = OpenApiSchemaType.Integer });
         Assert.Equal("int", type.TypeName);
         Assert.False(type.IsEnum);
     }
@@ -26,14 +21,12 @@ public class EsTypeTests
     [Fact]
     public void FromSchema_MapsIntegerWithEnumToEnumReference()
     {
-        var schema = new OpenApiSchema
+        var type = EsType.FromSchema(new OpenApiSchema
         {
-            Type = "integer",
-            Enum = new List<IOpenApiAny> { new OpenApiInteger(1) },
-            Reference = new OpenApiReference { Id = "MessageTypeDto" },
-        };
-
-        var type = EsType.FromSchema(schema);
+            Types = OpenApiSchemaType.Integer,
+            IntegerEnumValues = [1],
+            ReferenceName = "MessageTypeDto",
+        });
 
         Assert.Equal("MessageTypeDto", type.TypeName);
         Assert.True(type.IsEnum);
@@ -41,22 +34,17 @@ public class EsTypeTests
     }
 
     [Fact]
-    public void FromSchema_MapsObjectToClassWithJsonApiStructBase()
-    {
-        var type = EsType.FromSchema(new OpenApiSchema { Type = "object" });
-        Assert.Equal("JsonApiStruct", type.BaseTypeName);
-    }
+    public void FromSchema_MapsObjectToClassWithJsonApiStructBase() =>
+        Assert.Equal("JsonApiStruct", EsType.FromSchema(new OpenApiSchema { Types = OpenApiSchemaType.Object }).BaseTypeName);
 
     [Fact]
     public void FromSchema_MapsArrayOfReferenceToRefArraySyntax()
     {
-        var schema = new OpenApiSchema
+        var type = EsType.FromSchema(new OpenApiSchema
         {
-            Type = "array",
-            Items = new OpenApiSchema { Type = "object", Reference = new OpenApiReference { Id = "MessageDto" } },
-        };
-
-        var type = EsType.FromSchema(schema);
+            Types = OpenApiSchemaType.Array,
+            Items = new OpenApiSchema { Types = OpenApiSchemaType.Object, ReferenceName = "MessageDto" },
+        });
 
         Assert.Equal("ref array<ref MessageDto>", type.TypeName);
         Assert.True(type.IsArray);
@@ -66,56 +54,40 @@ public class EsTypeTests
     [Fact]
     public void FromSchema_MapsArrayOfReferencedEnumToRefArrayWithoutRefOnItemType()
     {
-        // Enforce Script enums are value types, so "ref array<ref SomeEnum>" is
-        // invalid — only the array itself is a ref, not each enum element.
-        var schema = new OpenApiSchema
+        var type = EsType.FromSchema(new OpenApiSchema
         {
-            Type = "array",
+            Types = OpenApiSchemaType.Array,
             Items = new OpenApiSchema
             {
-                Type = "integer",
-                Enum = new List<IOpenApiAny> { new OpenApiInteger(0), new OpenApiInteger(1) },
-                Reference = new OpenApiReference { Id = "MessageTypeDto" },
+                Types = OpenApiSchemaType.Integer,
+                IntegerEnumValues = [0, 1],
+                ReferenceName = "MessageTypeDto",
             },
-        };
-
-        var type = EsType.FromSchema(schema);
+        });
 
         Assert.Equal("ref array<MessageTypeDto>", type.TypeName);
     }
 
     [Fact]
-    public void FromSchema_MapsArrayOfPrimitiveToRefArraySyntax()
-    {
-        var schema = new OpenApiSchema
+    public void FromSchema_MapsArrayOfPrimitiveToRefArraySyntax() =>
+        Assert.Equal("ref array<string>", EsType.FromSchema(new OpenApiSchema
         {
-            Type = "array",
-            Items = new OpenApiSchema { Type = "string" },
-        };
-
-        var type = EsType.FromSchema(schema);
-
-        Assert.Equal("ref array<string>", type.TypeName);
-    }
+            Types = OpenApiSchemaType.Array,
+            Items = new OpenApiSchema { Types = OpenApiSchemaType.String },
+        }).TypeName);
 
     [Fact]
     public void FromSchema_MapsPlainReferenceToItsId()
     {
-        var schema = new OpenApiSchema { Type = "object", Reference = new OpenApiReference { Id = "CharacterDto" } };
-
-        var type = EsType.FromSchema(schema);
-
+        var type = EsType.FromSchema(new OpenApiSchema { Types = OpenApiSchemaType.Object, ReferenceName = "CharacterDto" });
         Assert.Equal("CharacterDto", type.TypeName);
         Assert.True(type.IsReference);
     }
 
     [Fact]
-    public void FromSchema_SetsIsNullable_FromSchemaNullableFlag()
+    public void FromSchema_SetsIsNullable_FromSchemaTypeArray()
     {
-        var schema = new OpenApiSchema { Type = "string", Nullable = true };
-
-        var type = EsType.FromSchema(schema);
-
+        var type = EsType.FromSchema(new OpenApiSchema { Types = OpenApiSchemaType.String | OpenApiSchemaType.Null });
         Assert.True(type.IsNullable);
     }
 }

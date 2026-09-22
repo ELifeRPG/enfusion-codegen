@@ -1,10 +1,10 @@
-class CharacterDto : JsonApiStruct
+class ELIFE_CharacterDto : JsonApiStruct
 {
 	string id;
 	string firstName;
 	string lastName;
 
-	void CharacterDto()
+	void ELIFE_CharacterDto()
 	{
 		RegV("id");
 		RegV("firstName");

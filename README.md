@@ -28,9 +28,10 @@ with the `read:packages` scope is enough):
 
     enfusion-codegen generate ./openapi.json --output ./out --prefix ELIFE_
 
-- `--prefix` names the client singleton, callback classes, and the base
-  callback/status-enum (e.g. `ELIFE_Api`, `ELIFE_CharacterDtoCallback`,
-  `ELIFE_BaseRestCallback`). DTO/model class names are never prefixed.
+- `--prefix` names every generated type, including schema structs and enums,
+  the client singleton, callback classes, and the base callback/status-enum
+  (e.g. `ELIFE_CharacterDto`, `ELIFE_Api`,
+  `ELIFE_CharacterDtoCallback`, `ELIFE_BaseRestCallback`).
 - `Api/{prefix}Api_Base.c` is only scaffolded if it doesn't already
   exist — it's meant to hold hand-written config/bootstrap logic and is
   never overwritten by later runs.

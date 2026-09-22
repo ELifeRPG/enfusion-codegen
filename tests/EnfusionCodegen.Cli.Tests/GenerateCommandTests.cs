@@ -16,7 +16,7 @@ public class GenerateCommandTests : IDisposable
         var exitCode = await GenerateCommand.RunAsync(specPath, _outputDir, "ELIFE_");
 
         Assert.Equal(0, exitCode);
-        Assert.True(File.Exists(Path.Combine(_outputDir, "Api", "Structs", "CharacterDto.c")));
+        Assert.True(File.Exists(Path.Combine(_outputDir, "Api", "Structs", "ELIFE_CharacterDto.c")));
         Assert.True(File.Exists(Path.Combine(_outputDir, "Api", "ELIFE_BaseRestCallback.c")));
     }
 

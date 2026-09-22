@@ -1,6 +1,6 @@
 using System.Text;
 using EnfusionCodegen.Core.Model;
-using Microsoft.OpenApi.Models;
+using EnfusionCodegen.Core.OpenApi;
 
 namespace EnfusionCodegen.Core.ModelBuilder;
 
@@ -15,13 +15,13 @@ public static class OperationModelBuilder
         {
             foreach (var (verb, operation) in item.Operations)
             {
-                if (verb == OperationType.Patch)
+                if (verb == OpenApiHttpMethod.Patch)
                 {
                     skipped.Add(path);
                     continue;
                 }
 
-                if (verb is not (OperationType.Get or OperationType.Post or OperationType.Put or OperationType.Delete))
+                if (verb is not (OpenApiHttpMethod.Get or OpenApiHttpMethod.Post or OpenApiHttpMethod.Put or OpenApiHttpMethod.Delete))
                 {
                     continue;
                 }
@@ -33,14 +33,14 @@ public static class OperationModelBuilder
         return (operations, skipped);
     }
 
-    private static EsOperation BuildOperation(string path, OperationType verb, OpenApiOperation operation)
+    private static EsOperation BuildOperation(string path, OpenApiHttpMethod verb, OpenApiOperation operation)
     {
         var parameters = new List<EsParameter>();
         var pathTemplate = new StringBuilder();
         var segments = path.TrimStart('/').Split('/');
         var positionalIndex = 0;
         var pathParamNames = operation.Parameters
-            .Where(p => p.In == ParameterLocation.Path)
+            .Where(p => p.Location == OpenApiParameterLocation.Path)
             .ToDictionary(p => p.Name, p => p);
 
         for (var i = 0; i < segments.Length; i++)
@@ -66,7 +66,7 @@ public static class OperationModelBuilder
         }
 
         var queryParams = operation.Parameters
-            .Where(p => p.In == ParameterLocation.Query)
+            .Where(p => p.Location == OpenApiParameterLocation.Query)
             .ToList();
 
         for (var i = 0; i < queryParams.Count; i++)
@@ -79,21 +79,21 @@ public static class OperationModelBuilder
         }
 
         EsType? requestBodyType = null;
-        if (operation.RequestBody?.Content.TryGetValue("application/json", out var requestMedia) == true)
+        if (operation.RequestBody?.Content.TryGetValue("application/json", out var requestMedia) == true && requestMedia.Schema is not null)
         {
             requestBodyType = EsType.FromSchema(requestMedia.Schema);
         }
 
         EsType? responseType = null;
         var successResponse = operation.Responses.FirstOrDefault(r => r.Key.StartsWith('2'));
-        if (successResponse.Value?.Content.TryGetValue("application/json", out var responseMedia) == true)
+        if (successResponse.Value?.Content.TryGetValue("application/json", out var responseMedia) == true && responseMedia.Schema is not null)
         {
             responseType = EsType.FromSchema(responseMedia.Schema);
         }
 
         return new EsOperation(
             BuildOperationName(verb, operation, path),
-            operation.Tags.FirstOrDefault()?.Name ?? "Default",
+            operation.Tags.FirstOrDefault() ?? "Default",
             MapVerb(verb),
             pathTemplate.ToString(),
             parameters,
@@ -101,7 +101,7 @@ public static class OperationModelBuilder
             responseType);
     }
 
-    private static string BuildOperationName(OperationType verb, OpenApiOperation operation, string path)
+    private static string BuildOperationName(OpenApiHttpMethod verb, OpenApiOperation operation, string path)
     {
         if (!string.IsNullOrEmpty(operation.OperationId))
         {
@@ -127,7 +127,7 @@ public static class OperationModelBuilder
             // POST against a collection segment creates a single new instance of it
             // (e.g. POST "characters" -> creates one Character), so singularize it too.
             var isLastSegment = i == segments.Length - 1;
-            var shouldSingularize = isFollowedByPathParameter || (isLastSegment && verb == OperationType.Post);
+            var shouldSingularize = isFollowedByPathParameter || (isLastSegment && verb == OpenApiHttpMethod.Post);
 
             var word = shouldSingularize ? Singularize(segment) : segment;
             nameParts.Add(char.ToUpperInvariant(word[0]) + word[1..]);
@@ -156,21 +156,21 @@ public static class OperationModelBuilder
         return word;
     }
 
-    private static string VerbPrefix(OperationType verb) => verb switch
+    private static string VerbPrefix(OpenApiHttpMethod verb) => verb switch
     {
-        OperationType.Get => "Get",
-        OperationType.Post => "Create",
-        OperationType.Put => "Update",
-        OperationType.Delete => "Delete",
+        OpenApiHttpMethod.Get => "Get",
+        OpenApiHttpMethod.Post => "Create",
+        OpenApiHttpMethod.Put => "Update",
+        OpenApiHttpMethod.Delete => "Delete",
         _ => verb.ToString(),
     };
 
-    private static EsHttpVerb MapVerb(OperationType verb) => verb switch
+    private static EsHttpVerb MapVerb(OpenApiHttpMethod verb) => verb switch
     {
-        OperationType.Get => EsHttpVerb.Get,
-        OperationType.Post => EsHttpVerb.Post,
-        OperationType.Put => EsHttpVerb.Put,
-        OperationType.Delete => EsHttpVerb.Delete,
+        OpenApiHttpMethod.Get => EsHttpVerb.Get,
+        OpenApiHttpMethod.Post => EsHttpVerb.Post,
+        OpenApiHttpMethod.Put => EsHttpVerb.Put,
+        OpenApiHttpMethod.Delete => EsHttpVerb.Delete,
         _ => throw new ArgumentOutOfRangeException(nameof(verb)),
     };
 }

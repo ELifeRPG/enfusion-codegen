@@ -7,9 +7,9 @@ namespace EnfusionCodegen.Core.Tests;
 public class GoldenFileTests
 {
     [Theory]
-    [InlineData("Api/Structs/CharacterDto.c")]
-    [InlineData("Api/Structs/MessageTypeDto.c")]
-    [InlineData("Api/Structs/CharacterDtoListResultDto.c")]
+    [InlineData("Api/Structs/ELIFE_CharacterDto.c")]
+    [InlineData("Api/Structs/ELIFE_MessageTypeDto.c")]
+    [InlineData("Api/Structs/ELIFE_CharacterDtoListResultDto.c")]
     [InlineData("Api/Callbacks/ELIFE_CharacterDtoResultDtoCallback.c")]
     [InlineData("Api/ELIFE_BaseRestCallback.c")]
     [InlineData("Api/ELIFE_Api_Character.c")]

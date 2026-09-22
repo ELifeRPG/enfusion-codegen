@@ -1,6 +1,8 @@
+using EnfusionCodegen.Core.Model;
 using EnfusionCodegen.Core.ModelBuilder;
 using EnfusionCodegen.Core.OpenApi;
 using EnfusionCodegen.Core.Writers;
+using System.Text.RegularExpressions;
 
 namespace EnfusionCodegen.Core.Generation;
 
@@ -22,7 +24,8 @@ public static class GeneratorPipeline
 
         var (classes, enums, skippedSchemas) = SchemaModelBuilder.Build(document);
         var (operations, skippedPatchPaths) = OperationModelBuilder.Build(document);
-        var callbacks = CallbackModelBuilder.Build(operations, prefix);
+        (classes, enums, operations) = PrefixSchemaTypes(classes, enums, operations, prefix);
+        var callbacks = CallbackModelBuilder.Build(operations, string.Empty);
         var callbackClassByResponseType = callbacks.ToDictionary(c => c.ResponseModelName, c => c.Name);
 
         foreach (var skipped in skippedPatchPaths)
@@ -32,7 +35,7 @@ public static class GeneratorPipeline
 
         foreach (var skipped in skippedSchemas)
         {
-            Console.WriteLine($"warning: skipping schema {skipped} — unsupported schema shape (not object or integer enum)");
+            Console.WriteLine($"warning: skipping schema {skipped} — unsupported schema shape (not object or enum)");
         }
 
         var emittedTypeNames = new HashSet<string>(classes.Select(c => c.Name).Concat(enums.Select(e => e.Name)));
@@ -67,6 +70,7 @@ public static class GeneratorPipeline
         }
 
         files.Add(new GeneratedFile($"Api/{prefix}BaseRestCallback.c", BoilerplateWriter.WriteBaseRestCallback(prefix), OverwriteIfExists: true));
+        files.Add(new GeneratedFile($"Api/{prefix}ApiConfigDto.c", BoilerplateWriter.WriteApiConfigScaffold(prefix), OverwriteIfExists: true));
         files.Add(new GeneratedFile($"Api/{prefix}Api_Base.c", BoilerplateWriter.WriteApiBaseScaffold(prefix), OverwriteIfExists: false));
 
         foreach (var tagGroup in operations.GroupBy(o => o.Tag))
@@ -76,6 +80,55 @@ public static class GeneratorPipeline
         }
 
         return files;
+    }
+
+    private static (IReadOnlyList<EsClass> Classes, IReadOnlyList<EsEnum> Enums, IReadOnlyList<EsOperation> Operations) PrefixSchemaTypes(
+        IReadOnlyList<EsClass> classes,
+        IReadOnlyList<EsEnum> enums,
+        IReadOnlyList<EsOperation> operations,
+        string prefix)
+    {
+        var schemaNames = classes.Select(esClass => esClass.Name)
+            .Concat(enums.Select(esEnum => esEnum.Name))
+            .OrderByDescending(name => name.Length)
+            .ToList();
+        var schemaNamePattern = schemaNames.Count == 0
+            ? null
+            : new Regex(string.Join("|", schemaNames.Select(Regex.Escape)));
+
+        EsType PrefixType(EsType type)
+        {
+            var typeName = schemaNamePattern?.Replace(type.TypeName, match => prefix + match.Value) ?? type.TypeName;
+            return new EsType
+            {
+                TypeName = typeName,
+                BaseTypeName = type.BaseTypeName,
+                DefaultValueLiteral = type.DefaultValueLiteral,
+                IsEnum = type.IsEnum,
+                IsArray = type.IsArray,
+                IsReference = type.IsReference,
+                IsNullable = type.IsNullable,
+            };
+        }
+
+        var prefixedClasses = classes
+            .Select(esClass => esClass with
+            {
+                Name = prefix + esClass.Name,
+                Properties = esClass.Properties.Select(property => property with { Type = PrefixType(property.Type) }).ToList(),
+            })
+            .ToList();
+        var prefixedEnums = enums.Select(esEnum => esEnum with { Name = prefix + esEnum.Name }).ToList();
+        var prefixedOperations = operations
+            .Select(operation => operation with
+            {
+                Parameters = operation.Parameters.Select(parameter => parameter with { Type = PrefixType(parameter.Type) }).ToList(),
+                RequestBodyType = operation.RequestBodyType is null ? null : PrefixType(operation.RequestBodyType),
+                ResponseType = operation.ResponseType is null ? null : PrefixType(operation.ResponseType),
+            })
+            .ToList();
+
+        return (prefixedClasses, prefixedEnums, prefixedOperations);
     }
 
     private static bool IsHttpUrl(string specPath, out Uri? uri)

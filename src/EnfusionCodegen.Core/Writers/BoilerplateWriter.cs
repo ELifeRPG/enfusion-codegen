@@ -69,30 +69,75 @@ public static class BoilerplateWriter
             $"\tprotected static ref {prefix}Api s_Instance;\n" +
             "\tprotected static string serverURL;\n" +
             "\n" +
+            "\tprotected const string CONFIG_FILE_PATH = \"$profile:ELifeRPG.json\";\n" +
+            "\tprotected const string WORKBENCH_DEFAULT_SERVER_URL = \"http://127.0.0.1:5200/\";\n" +
+            "\n" +
+            "\t//------------------------------------------------------------------------------------------------\n" +
             $"\tstatic {prefix}Api GetInstance()\n" +
             "\t{\n" +
             "\t\treturn s_Instance;\n" +
             "\t}\n" +
             "\n" +
+            "\t//------------------------------------------------------------------------------------------------\n" +
             $"\tstatic void Initialize()\n" +
             "\t{\n" +
             $"\t\ts_Instance = new {prefix}Api();\n" +
             "\t}\n" +
             "\n" +
-            "\tprotected RestContext GetElifeApi()\n" +
+            "\t//------------------------------------------------------------------------------------------------\n" +
+            "\tRestContext GetElifeApi()\n" +
             "\t{\n" +
             "\t\tRestContext ctx = GetGame().GetRestApi().GetContext(serverURL);\n" +
-            "\t\tstring headers = BuildHeaders();\n" +
-            "\t\tif (headers != \"\")\n" +
-            "\t\t\tctx.SetHeaders(headers);\n" +
+            "\t\tctx.SetHeaders(\"Content-Type,application/json\");\n" +
             "\t\treturn ctx;\n" +
             "\t}\n" +
             "\n" +
-            "\t// Extension point: fill in once RestContext.SetHeaders' expected string\n" +
-            "\t// format has been confirmed in Workbench (undocumented as of writing).\n" +
-            "\tprotected string BuildHeaders()\n" +
+            "\t//------------------------------------------------------------------------------------------------\n" +
+            "\tprotected string ParseServerUrlFromProfile()\n" +
             "\t{\n" +
-            "\t\treturn \"\";\n" +
+            "\t\tif (!FileIO.FileExist(CONFIG_FILE_PATH))\n" +
+            "\t\t{\n" +
+            "#ifdef WORKBENCH\n" +
+            "\t\t\treturn WORKBENCH_DEFAULT_SERVER_URL;\n" +
+            "#else\n" + 
+            "\t\t\treturn \"\";\n" +
+            "#endif\n" + 
+            "\t\t}\n" +
+            "\n" +
+            "\t\tELIFE_ApiConfigDto config = new ELIFE_ApiConfigDto();\n" +
+            "\t\tconfig.ExpandFromRAW(SCR_FileIOHelper.GetFileStringContent(CONFIG_FILE_PATH));\n" +
+            "\n" +
+            "\t\treturn config.serverUrl;\n" +
+            "\t}\n" +
+            "\n" +
+            "\t//------------------------------------------------------------------------------------------------\n" +
+            "\tvoid ELIFE_Api()\n" +
+            "\t{\n" +
+            "\t\tserverURL = ParseServerUrlFromProfile();\n" +
+            "\n" +
+            "\t\tif (serverURL != \"\")\n" +
+            "\t\t\treturn;\n" +
+            "\n" +
+            "#ifdef WORKBENCH\n" +
+            "\t\tPrint(\"ELIFE_Api | ServerUrl not configured.\", LogLevel.WARNING);\n" +
+            "#else\n" +
+            "\t\tPrint(\"ELIFE_Api | ServerUrl not configured - refusing to start.\", LogLevel.ERROR);\n" +
+            "\t\tGetGame().RequestClose();\n" +
+            "#endif\n" +
+            "\t}\n" +
+            "}\n";
+    }
+    
+    public static string WriteApiConfigScaffold(string prefix)
+    {
+        return
+            $"class {prefix}ApiConfigDto : JsonApiStruct\n" +
+            "{\n" +
+            "\tstring serverUrl;\n" +
+            "\n" +
+            $"\tvoid {prefix}ApiConfigDto()" +
+            "\t{\n" +
+            "\t\tRegV(\"serverUrl\");\n" +
             "\t}\n" +
             "}\n";
     }

@@ -24,6 +24,16 @@ public class BoilerplateWriterTests
         Assert.Contains("class ELIFE_Api", result);
         Assert.Contains("static ELIFE_Api GetInstance()", result);
         Assert.Contains("protected RestContext GetElifeApi()", result);
-        Assert.Contains("protected string BuildHeaders()", result); // extension point for future auth work
+    }
+
+    [Fact]
+    public void WriteApiConfigScaffold_DeclaresJsonApiStructWithPropertiesAndRegV()
+    {
+        var result = BoilerplateWriter.WriteApiConfigScaffold("ELIFE_");
+
+        Assert.Contains("class ELIFE_ApiConfigDto : JsonApiStruct", result);
+        Assert.Contains("void ELIFE_ApiConfigDto()", result);
+        Assert.Contains("string serverUrl;", result);
+        Assert.Contains("RegV(\"serverUrl\");", result);
     }
 }
