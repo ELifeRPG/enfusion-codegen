@@ -17,6 +17,27 @@ public class BoilerplateWriterTests
     }
 
     [Fact]
+    public void WriteBaseRestCallback_UsesSetOnSuccessInsteadOfObsoleteOverrides()
+    {
+        var result = BoilerplateWriter.WriteBaseRestCallback("ELIFE_");
+
+        Assert.Contains("SetOnSuccess(HandleSuccess);", result);
+        Assert.Contains("SetOnError(HandleError);", result);
+        Assert.DoesNotContain("override void OnSuccess", result);
+        Assert.DoesNotContain("override void OnError", result);
+    }
+
+    [Fact]
+    public void WriteBaseRestCallback_KeepsInFlightCallbacksAliveUntilTheyFire()
+    {
+        var result = BoilerplateWriter.WriteBaseRestCallback("ELIFE_");
+
+        Assert.Contains("protected static ref array<ref ELIFE_BaseRestCallback> s_aInFlight;", result);
+        Assert.Contains("s_aInFlight.Insert(this);", result);
+        Assert.Contains("s_aInFlight.RemoveItem(self);", result);
+    }
+
+    [Fact]
     public void WriteApiBaseScaffold_DeclaresSingletonWithGetInstanceAndGetContextHelper()
     {
         var result = BoilerplateWriter.WriteApiBaseScaffold("ELIFE_");

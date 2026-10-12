@@ -13,7 +13,6 @@ public static class ApiMethodWriter
         var sb = new StringBuilder();
         var pathParams = operation.Parameters.Where(p => p.IsPathParameter).ToList();
         var queryParams = operation.Parameters.Where(p => !p.IsPathParameter).ToList();
-        var positionalParams = pathParams.Concat(queryParams).ToList();
         var callbackClass = operation.ResponseType is not null && operation.ResponseType.IsReference
             ? callbackClassByResponseType[operation.ResponseType.TypeName]
             : $"{prefix}BaseRestCallback";
@@ -28,7 +27,8 @@ public static class ApiMethodWriter
         signatureParams.Add("Managed instance = null");
         signatureParams.Add("string functionName = \"\"");
 
-        sb.Append($"\tvoid {operation.OperationName}({string.Join(", ", signatureParams)})\n\t{{\n");
+        // The callback is returned so callers can read GetHttpCode() from their handler.
+        sb.Append($"\t{callbackClass} {operation.OperationName}({string.Join(", ", signatureParams)})\n\t{{\n");
         sb.Append($"\t\t{callbackClass} cbx = new {callbackClass};\n");
 
         var additionalDataArg = pathParams.Count > 0 && pathParams[0].Type.TypeName == "string"
@@ -41,20 +41,59 @@ public static class ApiMethodWriter
             sb.Append("\t\tbody.Pack();\n");
         }
 
-        var formattedPath = FormatPathForStringFormat(operation.PathTemplate);
-        var pathExpression = positionalParams.Count == 0
-            ? $"\"{operation.PathTemplate}\""
-            : $"string.Format(\"{formattedPath}\", {string.Join(", ", positionalParams.Select(p => p.Name))})";
-
         var dataArgument = operation.RequestBodyType is not null
             ? ", body.AsString()"
             : operation.Verb != EsHttpVerb.Get ? ", \"\"" : string.Empty;
         var verbName = operation.Verb.ToString().ToUpperInvariant();
 
-        sb.Append($"\t\tGetElifeApi().{verbName}(cbx, {pathExpression}{dataArgument});\n");
+        if (queryParams.Count == 0)
+        {
+            sb.Append($"\t\tGetElifeApi().{verbName}(cbx, {PathExpression(operation.PathTemplate, pathParams)}{dataArgument});\n");
+        }
+        else
+        {
+            AppendRouteWithQuery(sb, operation.PathTemplate, pathParams, queryParams);
+            sb.Append($"\t\tGetElifeApi().{verbName}(cbx, requestRoute{dataArgument});\n");
+        }
+        sb.Append("\t\treturn cbx;\n");
         sb.Append("\t}\n");
 
         return sb.ToString();
+    }
+
+    private static string PathExpression(string pathTemplate, IReadOnlyList<EsParameter> pathParams)
+    {
+        return pathParams.Count == 0
+            ? $"\"{pathTemplate}\""
+            : $"string.Format(\"{FormatPathForStringFormat(pathTemplate)}\", {string.Join(", ", pathParams.Select(p => p.Name))})";
+    }
+
+    // Empty string params are left out: ASP.NET treats "?since=" as an unparseable value (400), not a missing one.
+    private static void AppendRouteWithQuery(
+        StringBuilder sb,
+        string pathTemplate,
+        IReadOnlyList<EsParameter> pathParams,
+        IReadOnlyList<EsParameter> queryParams)
+    {
+        var path = pathTemplate[..pathTemplate.IndexOf('?')];
+        sb.Append($"\t\tstring requestRoute = {PathExpression(path, pathParams)};\n");
+        sb.Append("\t\tstring requestQuery = \"\";\n");
+
+        foreach (var param in queryParams)
+        {
+            var append = $"requestQuery += string.Format(\"&{param.Name}=%1\", {param.Name});\n";
+            if (param.Type.TypeName == "string")
+            {
+                sb.Append($"\t\tif ({param.Name} != \"\")\n\t\t\t{append}");
+            }
+            else
+            {
+                sb.Append($"\t\t{append}");
+            }
+        }
+
+        sb.Append("\t\tif (requestQuery != \"\")\n");
+        sb.Append("\t\t\trequestRoute += \"?\" + requestQuery.Substring(1, requestQuery.Length() - 1);\n");
     }
 
     private static string FormatPathForStringFormat(string pathTemplate)
