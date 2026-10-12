@@ -30,11 +30,12 @@ public class ApiTagFileWriterTests
         Assert.Equal(
             "modded class ELIFE_Api\n" +
             "{\n" +
-            "\tvoid GetAccountCharacters(string accountId, Managed instance = null, string functionName = \"\")\n" +
+            "\tELIFE_CharacterDtoListResultDtoCallback GetAccountCharacters(string accountId, Managed instance = null, string functionName = \"\")\n" +
             "\t{\n" +
             "\t\tELIFE_CharacterDtoListResultDtoCallback cbx = new ELIFE_CharacterDtoListResultDtoCallback;\n" +
             "\t\tcbx.SetCallback(instance, functionName, accountId);\n" +
             "\t\tGetElifeApi().GET(cbx, string.Format(\"accounts/%1/characters\", accountId));\n" +
+            "\t\treturn cbx;\n" +
             "\t}\n" +
             "}\n",
             result);
@@ -57,12 +58,13 @@ public class ApiTagFileWriterTests
         Assert.Equal(
             "modded class ELIFE_Api\n" +
             "{\n" +
-            "\tvoid CreateCharacter(CharacterDto body, Managed instance = null, string functionName = \"\")\n" +
+            "\tELIFE_CharacterDtoResultDtoCallback CreateCharacter(CharacterDto body, Managed instance = null, string functionName = \"\")\n" +
             "\t{\n" +
             "\t\tELIFE_CharacterDtoResultDtoCallback cbx = new ELIFE_CharacterDtoResultDtoCallback;\n" +
             "\t\tcbx.SetCallback(instance, functionName);\n" +
             "\t\tbody.Pack();\n" +
             "\t\tGetElifeApi().POST(cbx, \"characters\", body.AsString());\n" +
+            "\t\treturn cbx;\n" +
             "\t}\n" +
             "}\n",
             result);
@@ -107,8 +109,49 @@ public class ApiTagFileWriterTests
 
         var result = ApiTagFileWriter.Write("CompanyEndpoints", new[] { operation }, "ELIFE_", CallbackLookup);
 
-        Assert.Contains("void GetCompanies(int page, string name, Managed instance = null, string functionName = \"\")", result);
-        Assert.Contains("GetElifeApi().GET(cbx, string.Format(\"companies?page=%1&name=%2\", page, name));", result);
+        Assert.Equal(
+            "modded class ELIFE_Api\n" +
+            "{\n" +
+            "\tELIFE_CharacterDtoListResultDtoCallback GetCompanies(int page, string name, Managed instance = null, string functionName = \"\")\n" +
+            "\t{\n" +
+            "\t\tELIFE_CharacterDtoListResultDtoCallback cbx = new ELIFE_CharacterDtoListResultDtoCallback;\n" +
+            "\t\tcbx.SetCallback(instance, functionName);\n" +
+            "\t\tstring requestRoute = \"companies\";\n" +
+            "\t\tstring requestQuery = \"\";\n" +
+            "\t\trequestQuery += string.Format(\"&page=%1\", page);\n" +
+            "\t\tif (name != \"\")\n" +
+            "\t\t\trequestQuery += string.Format(\"&name=%1\", name);\n" +
+            "\t\tif (requestQuery != \"\")\n" +
+            "\t\t\trequestRoute += \"?\" + requestQuery.Substring(1, requestQuery.Length() - 1);\n" +
+            "\t\tGetElifeApi().GET(cbx, requestRoute);\n" +
+            "\t\treturn cbx;\n" +
+            "\t}\n" +
+            "}\n",
+            result);
+    }
+
+    [Fact]
+    public void Write_StringQueryParameterAfterPathParameter_IsOnlyAppendedWhenNotEmpty()
+    {
+        // "?since=" is an unparseable value to ASP.NET, not a missing one - it answers 400.
+        var operation = new EsOperation(
+            "PollPhoneMessages",
+            "Phone",
+            EsHttpVerb.Get,
+            "phones/{0}/apps/messages/updates?since={1}",
+            new[]
+            {
+                new EsParameter("phoneId", new EsType { TypeName = "string" }, IsPathParameter: true),
+                new EsParameter("since", new EsType { TypeName = "string" }, IsPathParameter: false),
+            },
+            null,
+            new EsType { TypeName = "CharacterDtoListResultDto", IsReference = true });
+
+        var result = ApiMethodWriter.Write(operation, "ELIFE_", CallbackLookup);
+
+        Assert.Contains("string requestRoute = string.Format(\"phones/%1/apps/messages/updates\", phoneId);", result);
+        Assert.Contains("if (since != \"\")\n\t\t\trequestQuery += string.Format(\"&since=%1\", since);", result);
+        Assert.DoesNotContain("?since=", result);
     }
 
     [Fact]

@@ -7,6 +7,9 @@ public static class BoilerplateWriter
         return
             $"class {prefix}BaseRestCallback : RestCallback\n" +
             "{\n" +
+            "\t//! RestContext doesn't keep the callback alive, so in-flight ones are held here until they fire.\n" +
+            $"\tprotected static ref array<ref {prefix}BaseRestCallback> s_aInFlight;\n" +
+            "\n" +
             "\tprotected ref ScriptCallQueue m_Invoker;\n" +
             "\tprotected Managed m_InvokeInstance;\n" +
             "\tprotected string m_InvokeMethodName;\n" +
@@ -18,6 +21,14 @@ public static class BoilerplateWriter
             "\t\tm_InvokeInstance = instance;\n" +
             "\t\tm_InvokeMethodName = functionName;\n" +
             "\t\tm_InvokeAdditionalData = additionalData;\n" +
+            "\n" +
+            "\t\tSetOnSuccess(HandleSuccess);\n" +
+            "\t\tSetOnError(HandleError);\n" +
+            "\n" +
+            "\t\tif (!s_aInFlight)\n" +
+            $"\t\t\ts_aInFlight = new array<ref {prefix}BaseRestCallback>();\n" +
+            "\n" +
+            "\t\ts_aInFlight.Insert(this);\n" +
             "\t}\n" +
             "\n" +
             $"\t{prefix}EApiStatusCode ExtractData(string data, int dataSize, out JsonApiStruct resultData)\n" +
@@ -25,20 +36,27 @@ public static class BoilerplateWriter
             $"\t\treturn {prefix}EApiStatusCode.SUCCESS;\n" +
             "\t}\n" +
             "\n" +
-            "\toverride void OnSuccess(string data, int dataSize)\n" +
+            "\tprotected void HandleSuccess()\n" +
             "\t{\n" +
+            "\t\tstring data = GetData();\n" +
             "\t\tJsonApiStruct resultData;\n" +
-            $"\t\t{prefix}EApiStatusCode status = ExtractData(data, dataSize, resultData);\n" +
+            $"\t\t{prefix}EApiStatusCode status = ExtractData(data, data.Length(), resultData);\n" +
             "\t\tInvokeCallback(status, resultData);\n" +
             "\t}\n" +
             "\n" +
-            "\toverride void OnError( int errorCode )\n" +
+            "\tprotected void HandleError()\n" +
             "\t{\n" +
+            "\t\tPrint(string.Format(\"%1 | request failed, RestResult=%2 HTTP=%3\", ClassName(), GetRestResult(), GetHttpCode()), LogLevel.ERROR);\n" +
             $"\t\tInvokeCallback({prefix}EApiStatusCode.ERROR, null);\n" +
             "\t}\n" +
             "\n" +
             $"\tprotected void InvokeCallback({prefix}EApiStatusCode statusCode, JsonApiStruct data)\n" +
             "\t{\n" +
+            "\t\t//! Keeps this alive for the rest of the call after it leaves s_aInFlight.\n" +
+            $"\t\t{prefix}BaseRestCallback self = this;\n" +
+            "\t\tif (s_aInFlight)\n" +
+            "\t\t\ts_aInFlight.RemoveItem(self);\n" +
+            "\n" +
             "\t\tif (m_Invoker && m_InvokeInstance && m_InvokeMethodName)\n" +
             "\t\t{\n" +
             "\t\t\tif (m_InvokeAdditionalData != \"\")\n" +
