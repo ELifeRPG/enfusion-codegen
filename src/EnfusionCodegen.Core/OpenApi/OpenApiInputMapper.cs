@@ -45,6 +45,7 @@ internal static class OpenApiInputMapper
         {
             ParameterLocation.Path => OpenApiParameterLocation.Path,
             ParameterLocation.Query => OpenApiParameterLocation.Query,
+            ParameterLocation.Header => OpenApiParameterLocation.Header,
             _ => OpenApiParameterLocation.Other,
         },
         Schema = parameter.Schema is null ? new OpenApiSchema() : Map(parameter.Schema),

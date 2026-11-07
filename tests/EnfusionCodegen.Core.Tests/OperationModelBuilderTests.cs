@@ -21,7 +21,7 @@ public class OperationModelBuilderTests
         Assert.Equal("Account", op.Tag);
         Assert.Equal("GetAccountCharacters", op.OperationName);
         Assert.Single(op.Parameters);
-        Assert.True(op.Parameters[0].IsPathParameter);
+        Assert.Equal(EsParameterLocation.Path, op.Parameters[0].Location);
         Assert.Equal("accountId", op.Parameters[0].Name);
         Assert.Equal("CharacterDtoListResultDto", op.ResponseType!.TypeName);
         Assert.Null(op.RequestBodyType);
@@ -56,7 +56,7 @@ public class OperationModelBuilderTests
         Assert.Equal("Character", op.Tag);
         Assert.Equal("CreateCharacterSession", op.OperationName);
         Assert.Single(op.Parameters);
-        Assert.True(op.Parameters[0].IsPathParameter);
+        Assert.Equal(EsParameterLocation.Path, op.Parameters[0].Location);
         Assert.Equal("characterId", op.Parameters[0].Name);
     }
 
@@ -84,9 +84,9 @@ public class OperationModelBuilderTests
         Assert.Equal("companies?page={0}&name={1}", op.PathTemplate);
         Assert.Equal(2, op.Parameters.Count);
         Assert.Equal("page", op.Parameters[0].Name);
-        Assert.False(op.Parameters[0].IsPathParameter);
+        Assert.Equal(EsParameterLocation.Query, op.Parameters[0].Location);
         Assert.Equal("name", op.Parameters[1].Name);
-        Assert.False(op.Parameters[1].IsPathParameter);
+        Assert.Equal(EsParameterLocation.Query, op.Parameters[1].Location);
     }
 
     [Fact]
@@ -103,6 +103,26 @@ public class OperationModelBuilderTests
         }));
         Assert.Empty(operations);
         Assert.Contains("/widgets/{widgetId}", skipped);
+    }
+
+    [Fact]
+    public void Build_HeaderParameter_GetsAnIdentifierAndStaysOffThePath()
+    {
+        var op = OperationModelBuilder.Build(MinimalDocument("/bank-accounts/{number}/deposit", OpenApiHttpMethod.Put, new OpenApiOperation
+        {
+            Tags = ["Banking"],
+            Parameters =
+            [
+                new OpenApiParameter { Name = "number", Location = OpenApiParameterLocation.Path, Schema = new OpenApiSchema { Types = OpenApiSchemaType.String } },
+                new OpenApiParameter { Name = "Idempotency-Key", Location = OpenApiParameterLocation.Header, Schema = new OpenApiSchema { Types = OpenApiSchemaType.String } },
+            ],
+        })).Operations.Single();
+
+        Assert.Equal("bank-accounts/{0}/deposit", op.PathTemplate);
+        var header = op.Parameters.Single(p => p.Location == EsParameterLocation.Header);
+        Assert.Equal("idempotencyKey", header.Name);
+        Assert.Equal("Idempotency-Key", header.WireName);
+        Assert.Equal("string", header.Type.TypeName);
     }
 
     private static OpenApiDocument MinimalDocument(string path, OpenApiHttpMethod method, OpenApiOperation operation) => new()

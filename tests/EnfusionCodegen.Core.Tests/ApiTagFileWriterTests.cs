@@ -21,7 +21,7 @@ public class ApiTagFileWriterTests
             "Account",
             EsHttpVerb.Get,
             "accounts/{0}/characters",
-            new[] { new EsParameter("accountId", new EsType { TypeName = "string" }, IsPathParameter: true) },
+            new[] { new EsParameter("accountId", new EsType { TypeName = "string" }, EsParameterLocation.Path) },
             null,
             new EsType { TypeName = "CharacterDtoListResultDto", IsReference = true });
 
@@ -81,7 +81,7 @@ public class ApiTagFileWriterTests
             "Vehicle",
             EsHttpVerb.Get,
             "vehicles/{0}",
-            new[] { new EsParameter("vehicleId", new EsType { TypeName = "int" }, IsPathParameter: true) },
+            new[] { new EsParameter("vehicleId", new EsType { TypeName = "int" }, EsParameterLocation.Path) },
             null,
             new EsType { TypeName = "CharacterDtoResultDto", IsReference = true });
 
@@ -101,8 +101,8 @@ public class ApiTagFileWriterTests
             "companies?page={0}&name={1}",
             new[]
             {
-                new EsParameter("page", new EsType { TypeName = "int" }, IsPathParameter: false),
-                new EsParameter("name", new EsType { TypeName = "string" }, IsPathParameter: false),
+                new EsParameter("page", new EsType { TypeName = "int" }, EsParameterLocation.Query),
+                new EsParameter("name", new EsType { TypeName = "string" }, EsParameterLocation.Query),
             },
             null,
             new EsType { TypeName = "CharacterDtoListResultDto", IsReference = true });
@@ -141,8 +141,8 @@ public class ApiTagFileWriterTests
             "phones/{0}/apps/messages/updates?since={1}",
             new[]
             {
-                new EsParameter("phoneId", new EsType { TypeName = "string" }, IsPathParameter: true),
-                new EsParameter("since", new EsType { TypeName = "string" }, IsPathParameter: false),
+                new EsParameter("phoneId", new EsType { TypeName = "string" }, EsParameterLocation.Path),
+                new EsParameter("since", new EsType { TypeName = "string" }, EsParameterLocation.Query),
             },
             null,
             new EsType { TypeName = "CharacterDtoListResultDto", IsReference = true });
@@ -162,7 +162,7 @@ public class ApiTagFileWriterTests
             "Character",
             EsHttpVerb.Post,
             "characters/{0}/sessions",
-            new[] { new EsParameter("characterId", new EsType { TypeName = "string" }, IsPathParameter: true) },
+            new[] { new EsParameter("characterId", new EsType { TypeName = "string" }, EsParameterLocation.Path) },
             null,
             new EsType { TypeName = "CharacterDtoResultDto", IsReference = true });
 
@@ -178,7 +178,7 @@ public class ApiTagFileWriterTests
         var pathParams = new List<EsParameter>();
         for (var i = 0; i < 10; i++)
         {
-            pathParams.Add(new EsParameter($"param{i}", new EsType { TypeName = "string" }, IsPathParameter: true));
+            pathParams.Add(new EsParameter($"param{i}", new EsType { TypeName = "string" }, EsParameterLocation.Path));
         }
 
         var pathTemplate = "a/{0}/b/{1}/c/{2}/d/{3}/e/{4}/f/{5}/g/{6}/h/{7}/i/{8}/j/{9}/k";
@@ -197,4 +197,60 @@ public class ApiTagFileWriterTests
         Assert.Contains("%10", result);
         Assert.DoesNotContain("{9}", result);
     }
+
+    [Fact]
+    public void Write_HeaderParameters_AreSetOnTheContextRightBeforeTheCall()
+    {
+        var operation = new EsOperation(
+            "DepositToBankAccount",
+            "Banking",
+            EsHttpVerb.Put,
+            "bank-accounts/{0}/deposit",
+            new[]
+            {
+                new EsParameter("number", new EsType { TypeName = "string" }, EsParameterLocation.Path),
+                new EsParameter("idempotencyKey", new EsType { TypeName = "string" }, EsParameterLocation.Header) { WireName = "Idempotency-Key" },
+                new EsParameter("attempt", new EsType { TypeName = "int" }, EsParameterLocation.Header) { WireName = "X-Attempt" },
+            },
+            new EsType { TypeName = "ELIFE_DepositRequest", IsReference = true },
+            new EsType { TypeName = "CharacterDtoResultDto", IsReference = true });
+
+        var result = ApiMethodWriter.Write(operation, "ELIFE_", CallbackLookup);
+
+        Assert.Equal(
+            "\tELIFE_CharacterDtoResultDtoCallback DepositToBankAccount(ELIFE_DepositRequest body, string number, string idempotencyKey, int attempt, Managed instance = null, string functionName = \"\")\n" +
+            "\t{\n" +
+            "\t\tELIFE_CharacterDtoResultDtoCallback cbx = new ELIFE_CharacterDtoResultDtoCallback;\n" +
+            "\t\tcbx.SetCallback(instance, functionName, number);\n" +
+            "\t\tbody.Pack();\n" +
+            "\t\tRestContext ctx = GetElifeApi();\n" +
+            "\t\tstring requestHeaders = \"Content-Type,application/json\";\n" +
+            "\t\tif (idempotencyKey != \"\")\n" +
+            "\t\t\trequestHeaders += string.Format(\",Idempotency-Key,%1\", idempotencyKey);\n" +
+            "\t\trequestHeaders += string.Format(\",X-Attempt,%1\", attempt);\n" +
+            "\t\tctx.SetHeaders(requestHeaders);\n" +
+            "\t\tctx.PUT(cbx, string.Format(\"bank-accounts/%1/deposit\", number), body.AsString());\n" +
+            "\t\treturn cbx;\n" +
+            "\t}\n",
+            result);
+    }
+
+    [Fact]
+    public void Write_WithoutHeaderParameters_KeepsCallingGetElifeApiDirectly()
+    {
+        var operation = new EsOperation(
+            "GetCharacter",
+            "Character",
+            EsHttpVerb.Get,
+            "characters/{0}",
+            new[] { new EsParameter("characterId", new EsType { TypeName = "string" }, EsParameterLocation.Path) },
+            null,
+            new EsType { TypeName = "CharacterDtoResultDto", IsReference = true });
+
+        var result = ApiMethodWriter.Write(operation, "ELIFE_", CallbackLookup);
+
+        Assert.Contains("GetElifeApi().GET(cbx, ", result);
+        Assert.DoesNotContain("SetHeaders", result);
+    }
 }
+

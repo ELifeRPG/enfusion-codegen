@@ -50,7 +50,7 @@ public static class OperationModelBuilder
             {
                 var name = segment[1..^1];
                 var openApiParam = pathParamNames[name];
-                parameters.Add(new EsParameter(name, EsType.FromSchema(openApiParam.Schema), IsPathParameter: true));
+                parameters.Add(new EsParameter(name, EsType.FromSchema(openApiParam.Schema), EsParameterLocation.Path));
                 pathTemplate.Append($"{{{positionalIndex}}}");
                 positionalIndex++;
             }
@@ -74,8 +74,17 @@ public static class OperationModelBuilder
             var openApiParam = queryParams[i];
             pathTemplate.Append(i == 0 ? '?' : '&');
             pathTemplate.Append($"{openApiParam.Name}={{{positionalIndex}}}");
-            parameters.Add(new EsParameter(openApiParam.Name, EsType.FromSchema(openApiParam.Schema), IsPathParameter: false));
+            parameters.Add(new EsParameter(openApiParam.Name, EsType.FromSchema(openApiParam.Schema), EsParameterLocation.Query));
             positionalIndex++;
+        }
+
+        // Headers stay off the path template: the writer sends them through RestContext.SetHeaders.
+        foreach (var openApiParam in operation.Parameters.Where(p => p.Location == OpenApiParameterLocation.Header))
+        {
+            parameters.Add(new EsParameter(ToIdentifier(openApiParam.Name), EsType.FromSchema(openApiParam.Schema), EsParameterLocation.Header)
+            {
+                WireName = openApiParam.Name,
+            });
         }
 
         EsType? requestBodyType = null;
@@ -99,6 +108,19 @@ public static class OperationModelBuilder
             parameters,
             requestBodyType,
             responseType);
+    }
+
+    // "Idempotency-Key" -> "idempotencyKey": split on anything that can't be in an identifier,
+    // lower-case the first word, capitalize the rest.
+    private static string ToIdentifier(string headerName)
+    {
+        var words = System.Text.RegularExpressions.Regex.Split(headerName, "[^A-Za-z0-9]+")
+            .Where(word => word.Length > 0)
+            .ToList();
+
+        return string.Concat(words.Select((word, index) => index == 0
+            ? char.ToLowerInvariant(word[0]) + word[1..]
+            : char.ToUpperInvariant(word[0]) + word[1..]));
     }
 
     private static string BuildOperationName(OpenApiHttpMethod verb, OpenApiOperation operation, string path)

@@ -72,6 +72,7 @@ public enum OpenApiParameterLocation
 {
     Query,
     Path,
+    Header,
     Other,
 }
 
