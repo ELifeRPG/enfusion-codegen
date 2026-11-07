@@ -24,8 +24,12 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
       - name: Pack and publish
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          VERSION=$(git describe --abbrev=0 --tags --match "v*" | cut -c 2-)
+          # The release's own tag, with or without a leading "v" (1.2.0 and v1.2.0 both work).
+          # git describe --match "v*" ignored tags without the "v" and re-packed the last v-tag.
+          VERSION="${RELEASE_TAG#v}"
           dotnet pack src/EnfusionCodegen.Cli/EnfusionCodegen.Cli.csproj --configuration Release --output ./out -p:Version=$VERSION
           dotnet nuget push "./out/*.$VERSION.nupkg" --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}"
       - name: Upload output artifacts
