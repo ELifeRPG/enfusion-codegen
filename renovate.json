@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "packageRules": [
+    {
+      "description": "global.json pins one .NET preview SDK with rollForward disabled; the devcontainer image moves with it.",
+      "groupName": ".NET SDK",
+      "matchDatasources": ["dotnet-version", "docker"],
+      "matchPackageNames": ["dotnet-sdk", "mcr.microsoft.com/devcontainers/dotnet"]
+    },
+    {
+      "description": "The reader and the YAML reader ship together.",
+      "groupName": "Microsoft.OpenApi",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["Microsoft.OpenApi", "Microsoft.OpenApi.**"]
+    },
+    {
+      "description": "xUnit and the test runner tooling move together.",
+      "groupName": "test tooling",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["xunit", "xunit.**", "Microsoft.NET.Test.Sdk", "coverlet.collector"]
+    }
+  ]
+}
