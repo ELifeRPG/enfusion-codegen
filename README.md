@@ -42,9 +42,18 @@ with the `read:packages` scope is enough):
 
 - No `allOf`/`oneOf`/`anyOf` schema composition or polymorphism support.
 - No `multipart/form-data` request bodies.
-- No generated auth/header code — `RestContext.SetHeaders`'s expected
-  string format is undocumented and unverified; a `BuildHeaders()`
-  extension point is scaffolded instead.
+- Header parameters (`"in": "header"`) become method parameters, named
+  as identifiers (`Idempotency-Key` → `idempotencyKey`). The method takes
+  the context from `GetElifeApi()` and calls
+  `ctx.SetHeaders("Content-Type,application/json,<name>,<value>,…")` right
+  before the request; an empty string header is left out. The next
+  `GetElifeApi()` resets the shared context's headers to `Content-Type`
+  only. That relies on `SetHeaders` applying to the request queued right
+  after it, which has not been checked in Workbench yet. Header values
+  can't contain a comma, since `SetHeaders` separates names and values
+  with commas. Other headers set on the context by hand (e.g. in a
+  customised `GetElifeApi()`) are replaced for that one call.
+- No generated auth code.
 - `PATCH` operations are skipped (the engine has no `PATCH` verb).
 - Bodiless `POST`/`PUT`/`DELETE` calls pass an empty string literal as
   the `data` argument (e.g. `GetElifeApi().POST(cbx, "path", "")`) on

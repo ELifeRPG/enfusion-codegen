@@ -11,8 +11,9 @@ public static class ApiMethodWriter
         IReadOnlyDictionary<string, string> callbackClassByResponseType)
     {
         var sb = new StringBuilder();
-        var pathParams = operation.Parameters.Where(p => p.IsPathParameter).ToList();
-        var queryParams = operation.Parameters.Where(p => !p.IsPathParameter).ToList();
+        var pathParams = operation.Parameters.Where(p => p.Location == EsParameterLocation.Path).ToList();
+        var queryParams = operation.Parameters.Where(p => p.Location == EsParameterLocation.Query).ToList();
+        var headerParams = operation.Parameters.Where(p => p.Location == EsParameterLocation.Header).ToList();
         var callbackClass = operation.ResponseType is not null && operation.ResponseType.IsReference
             ? callbackClassByResponseType[operation.ResponseType.TypeName]
             : $"{prefix}BaseRestCallback";
@@ -24,6 +25,7 @@ public static class ApiMethodWriter
         }
         signatureParams.AddRange(pathParams.Select(p => $"{p.Type.TypeName} {p.Name}"));
         signatureParams.AddRange(queryParams.Select(p => $"{p.Type.TypeName} {p.Name}"));
+        signatureParams.AddRange(headerParams.Select(p => $"{p.Type.TypeName} {p.Name}"));
         signatureParams.Add("Managed instance = null");
         signatureParams.Add("string functionName = \"\"");
 
@@ -46,19 +48,51 @@ public static class ApiMethodWriter
             : operation.Verb != EsHttpVerb.Get ? ", \"\"" : string.Empty;
         var verbName = operation.Verb.ToString().ToUpperInvariant();
 
+        var context = "GetElifeApi()";
+        if (headerParams.Count > 0)
+        {
+            AppendHeaders(sb, headerParams);
+            context = "ctx";
+        }
+
         if (queryParams.Count == 0)
         {
-            sb.Append($"\t\tGetElifeApi().{verbName}(cbx, {PathExpression(operation.PathTemplate, pathParams)}{dataArgument});\n");
+            sb.Append($"\t\t{context}.{verbName}(cbx, {PathExpression(operation.PathTemplate, pathParams)}{dataArgument});\n");
         }
         else
         {
             AppendRouteWithQuery(sb, operation.PathTemplate, pathParams, queryParams);
-            sb.Append($"\t\tGetElifeApi().{verbName}(cbx, requestRoute{dataArgument});\n");
+            sb.Append($"\t\t{context}.{verbName}(cbx, requestRoute{dataArgument});\n");
         }
         sb.Append("\t\treturn cbx;\n");
         sb.Append("\t}\n");
 
         return sb.ToString();
+    }
+
+    // RestContext.SetHeaders takes "name,value,name,value". GetElifeApi() sets the Content-Type on the
+    // shared context and returns it, so the headers are set again in full right before this call, and
+    // the next call's GetElifeApi() drops them again. Values therefore can't contain a comma. As with
+    // query parameters, an empty string header is left out.
+    private static void AppendHeaders(StringBuilder sb, IReadOnlyList<EsParameter> headerParams)
+    {
+        sb.Append("\t\tRestContext ctx = GetElifeApi();\n");
+        sb.Append("\t\tstring requestHeaders = \"Content-Type,application/json\";\n");
+
+        foreach (var param in headerParams)
+        {
+            var append = $"requestHeaders += string.Format(\",{param.WireName},%1\", {param.Name});\n";
+            if (param.Type.TypeName == "string")
+            {
+                sb.Append($"\t\tif ({param.Name} != \"\")\n\t\t\t{append}");
+            }
+            else
+            {
+                sb.Append($"\t\t{append}");
+            }
+        }
+
+        sb.Append("\t\tctx.SetHeaders(requestHeaders);\n");
     }
 
     private static string PathExpression(string pathTemplate, IReadOnlyList<EsParameter> pathParams)

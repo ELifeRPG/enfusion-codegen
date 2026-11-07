@@ -120,4 +120,46 @@ public class GeneratorPipelineTests
             System.IO.File.Delete(specPath);
         }
     }
+
+    [Fact]
+    public async Task Generate_ReadsHeaderParametersFromTheSpec()
+    {
+        const string spec =
+            """
+            {
+              "openapi": "3.1.1",
+              "info": { "title": "Test", "version": "1.0" },
+              "paths": {
+                "/bank-accounts/{number}/deposit": {
+                  "put": {
+                    "tags": ["Banking"],
+                    "operationId": "DepositToBankAccount",
+                    "parameters": [
+                      { "name": "number", "in": "path", "required": true, "schema": { "type": "string" } },
+                      { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "OK" } }
+                  }
+                }
+              }
+            }
+            """;
+        var specPath = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(specPath, spec);
+
+            var files = await GeneratorPipeline.Generate(specPath, "ELIFE_");
+
+            var api = files.Single(f => f.RelativePath == "Api/ELIFE_Api_Banking.c").Content;
+            Assert.Contains("DepositToBankAccount(string number, string idempotencyKey, Managed instance = null", api);
+            Assert.Contains("requestHeaders += string.Format(\",Idempotency-Key,%1\", idempotencyKey);", api);
+            Assert.Contains("ctx.PUT(cbx, string.Format(\"bank-accounts/%1/deposit\", number), \"\");", api);
+        }
+        finally
+        {
+            File.Delete(specPath);
+        }
+    }
 }
+
