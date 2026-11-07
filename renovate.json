@@ -1,24 +1,62 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits"],
+  "extends": [
+    "config:recommended",
+    ":semanticCommits"
+  ],
   "packageRules": [
     {
-      "description": "global.json pins one .NET preview SDK with rollForward disabled; the devcontainer image moves with it.",
+      "description": "global.json pins one .NET preview SDK with rollForward disabled. The SDK, the images and the ASP.NET Core preview packages each use their own version scheme, so Renovate can't move them to the same preview together (it once bumped the devcontainer to preview.7 and OpenApi to rc.3 while global.json stayed on preview.6). Version updates wait for approval on the Dependency Dashboard and are done by hand in one PR.",
       "groupName": ".NET SDK",
-      "matchDatasources": ["dotnet-version", "docker"],
-      "matchPackageNames": ["dotnet-sdk", "mcr.microsoft.com/devcontainers/dotnet"]
+      "matchDatasources": [
+        "dotnet-version",
+        "docker"
+      ],
+      "matchPackageNames": [
+        "dotnet-sdk",
+        "mcr.microsoft.com/devcontainers/dotnet"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Pinning and digest updates of the .NET images keep the same SDK, so they don't need approval.",
+      "groupName": ".NET image digests",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mcr.microsoft.com/devcontainers/dotnet"
+      ],
+      "matchUpdateTypes": [
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "dependencyDashboardApproval": false
     },
     {
       "description": "The reader and the YAML reader ship together.",
       "groupName": "Microsoft.OpenApi",
-      "matchDatasources": ["nuget"],
-      "matchPackageNames": ["Microsoft.OpenApi", "Microsoft.OpenApi.**"]
+      "matchDatasources": [
+        "nuget"
+      ],
+      "matchPackageNames": [
+        "Microsoft.OpenApi",
+        "Microsoft.OpenApi.**"
+      ]
     },
     {
       "description": "xUnit and the test runner tooling move together.",
       "groupName": "test tooling",
-      "matchDatasources": ["nuget"],
-      "matchPackageNames": ["xunit", "xunit.**", "Microsoft.NET.Test.Sdk", "coverlet.collector"]
+      "matchDatasources": [
+        "nuget"
+      ],
+      "matchPackageNames": [
+        "xunit",
+        "xunit.**",
+        "Microsoft.NET.Test.Sdk",
+        "coverlet.collector"
+      ]
     }
   ]
 }
